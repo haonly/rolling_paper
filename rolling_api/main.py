@@ -64,49 +64,54 @@ def read_root():
     return {"Hello": "World"}
 
 
-@app.post("/users", response_description="Add new user", response_model=User)
+@app.post("/api/v1/rolling/user", response_description="Add new user", response_model=User)
 async def create_user(user: User = Body(...)):
     user = jsonable_encoder(user)
     user_id = user["user_id"]
 
     user_exist = await db[USR_COLLECTION].find_one({"user_id": user_id})
     if user_exist is not None:
-        raise HTTPException(status_code=409, detail=f"User {user_id} already exists")
+        _raiseException(409, f"User {user_id} already exists")
 
     new_user = await db[USR_COLLECTION].insert_one(user)
     created_user = await db[USR_COLLECTION].find_one({"_id": new_user.inserted_id})
     return JSONResponse(status_code=status.HTTP_201_CREATED, content=created_user)
 
 
-@app.get("/users", response_description="List all users", response_model=List[User])
+@app.get("/api/v1/rolling/users", response_description="List all users", response_model=List[User])
 async def list_users():
     users = await db[USR_COLLECTION].find().to_list(1000)
-    return users
+    return JSONResponse(status_code=status.HTTP_200_OK, content=users)
 
 
-@app.put("/{user_id}", response_description="Add a message", response_model=User)
+@app.put("/api/v1/rolling/message/{user_id}", response_description="Add a message", response_model=User)
 async def update_message(user_id: str, message: Message = Body(...)):
     msg = {k: v for k, v in message.dict().items() if v is not None}
 
     if len(msg) >= 1:
         update_result = await db[USR_COLLECTION].update_one({"user_id": user_id}, {"$push": {"messages": msg}})
-
+        # update_result.modified_count > 1 이면??
         if update_result.modified_count == 1:
             updated_user = await db[USR_COLLECTION].find_one({"user_id": user_id})
             if updated_user is not None:
-                return updated_user
+                return JSONResponse(status_code=status.HTTP_201_CREATED, content=updated_user)
 
+    # 위에서 업데이트를ㄹ 했는데 여기는 뭐하는??
     existing_user = await db[USR_COLLECTION].find_one({"user_id": user_id})
     if existing_user is not None:
         return existing_user
 
-    raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+    _raiseException(404, f"User {user_id} not found")
 
 
-@app.get("/{user_id}", response_description="List all messages", response_model=List[Message])
+@app.get("/api/v1/rolling/message/{user_id}", response_description="List all messages", response_model=List[Message])
 async def list_messages(user_id: str):
     user = await db[USR_COLLECTION].find_one({"user_id": user_id})
     if user is None:
-        raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+        _raiseException(404, f"User {user_id} not found")
     messages = user["messages"]
-    return messages
+    return JSONResponse(status_code=status.HTTP_200_OK, content=messages)
+
+
+def _raiseException(status_code, detail):
+    raise HTTPException(status_code=status_code, detail=detail)
