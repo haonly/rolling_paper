@@ -14,6 +14,7 @@ password = 'mongo'
 
 app = FastAPI()
 client = motor.motor_asyncio.AsyncIOMotorClient('mongodb://%s:%s@localhost:27017/' % (username, password))
+print(client)
 db = client[DB]
 
 
@@ -64,6 +65,7 @@ def read_root():
     return {"Hello": "World"}
 
 
+# 신규 유저 추가(유저 테이블 업데이트) -> '내 페이지 만들기' 버튼을 통해 활성화(로그인 이후)
 @app.post("/api/v1/rolling/user", response_description="Add new user", response_model=User)
 async def create_user(user: User = Body(...)):
     user = jsonable_encoder(user)
@@ -78,12 +80,14 @@ async def create_user(user: User = Body(...)):
     return JSONResponse(status_code=status.HTTP_201_CREATED, content=created_user)
 
 
+# 뒷 단 정도에서 필요할 법한
 @app.get("/api/v1/rolling/users", response_description="List all users", response_model=List[User])
 async def list_users():
     users = await db[USR_COLLECTION].find().to_list(1000)
     return JSONResponse(status_code=status.HTTP_200_OK, content=users)
 
 
+# paper 테이블에 넣을 사용자 입력 메시지(페이지 주인(user_id), 지금 로그인한 사용자, 입력한 메시지 필요)
 @app.put("/api/v1/rolling/message/{user_id}", response_description="Add a message", response_model=User)
 async def update_message(user_id: str, message: Message = Body(...)):
     msg = {k: v for k, v in message.dict().items() if v is not None}
@@ -104,6 +108,7 @@ async def update_message(user_id: str, message: Message = Body(...)):
     _raiseException(404, f"User {user_id} not found")
 
 
+# 해당 페이지에 걸려있는 메시지들 모두 return
 @app.get("/api/v1/rolling/message/{user_id}", response_description="List all messages", response_model=List[Message])
 async def list_messages(user_id: str):
     user = await db[USR_COLLECTION].find_one({"user_id": user_id})
